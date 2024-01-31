@@ -1,0 +1,60 @@
+# Purpose: Create Azure Load Test plan in Azure Load Testing resource using Azure pipeline template
+# parameters:
+# loadTestResource (String) (Required) Azure Load Testing resource name
+# loadTestResourceGroup (String) (Required) Azure Load Testing resource group name
+# projectCode (String) (Required) Project code for the load test plan
+# environment (String) (Required) Environment name
+# testName (String) (Required) Name for the Load Test plan
+# loadTestConfigFile (String) (Required) Path to Load Test config (.yaml) file
+# azureServiceConnection (String) (Required) Azure Service Connection Name.
+
+parameters:
+
+- name: loadTestResource
+  displayName: Azure Load Testing resource name
+  type: string
+
+- name: loadTestResourceGroup
+  displayName: Azure Load Testing resource group name
+  type: string
+
+- name: projectCode
+  displayName: Project code for the test plan
+  type: string
+
+- name: environment
+  displayName: Environment name
+  type: string
+
+- name: testName
+  displayName: Name for the Load Test plan
+  type: string
+
+- name: loadTestConfigFile
+  displayName: Path to Load Test config (.yaml) file
+  type: string
+
+- name: azureServiceConnection
+  displayName: Azure Service Connection Name
+  type: string
+
+stages:
+  - stage: Load_Test_Plan
+    jobs:
+      - job: Load_Test_Plan_Create
+        steps:
+
+          - bash: |
+              DATETIME=$(date +%Y/%m/%d_%H:%M:%S)
+              echo "##vso[task.setvariable variable=DATETIME]$DATETIME"
+              TEST_NAME="testId: ${{parameters.projectCode}}-${{parameters.environment}}-${{parameters.testName}}"
+              sed -i "s/testId:.*/$TEST_NAME/" $(loadTestConfigFile)
+
+          - task: AzureLoadTest@1
+            displayName: Azure Load Test Plan creation
+            inputs:
+              azureSubscription: ${{parameters.azureServiceConnection}}
+              loadTestConfigFile: ${{parameters.loadTestConfigFile}}
+              resourceGroup: ${{parameters.loadTestResourceGroup}}
+              loadTestResource: ${{parameters.loadTestResource}}
+              loadTestRunName: 'TestRun_$(DATETIME)'

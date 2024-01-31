@@ -1,0 +1,98 @@
+# Purpose: Azure pipeline template for the Node JS CI Pipeline tasks
+# Parameters:
+# cliProjectKey (String) (Required) Project Name to be given for SAST Scan.
+# nodeVersion (String) (Required) Node version to be installed for Artifact building.
+# sastCliSources (String) (Required) Path of the project to scan
+# staticCodeSecurityScanProjectName (String) (Required) Project Name to be given for Snyk Scan.
+# securityScanTargetName (String) (Required) Target Name to be given for Snyk Scan.
+# staticCodeSecurityScanTargetManifestFile (String) (Optional) Custom path to manifest file to test.
+# targetFolderToCopyArtifact (String) (Optional) Target Folder to copy files into. Default: ''
+# additionalIncludedPathsInPackaging (String) (Optional) List of files and Paths to be copied into the target folder mentioned "targetFolderToCopyArtifact". Only applicable when value of targetFolderToCopyArtifact is set except default.
+
+parameters:
+
+- name: cliProjectKey
+  displayName: Project Name to be given for SAST Scan.
+  type: string
+
+- name: nodeVersion
+  displayName: Node version to be installed for Artifact building.
+  type: string
+
+- name: sastCliSources
+  displayName: Path of the project to scan
+  type: string
+  
+- name: staticCodeSecurityScanProjectName
+  displayName: Project Name to be given for Static code security scan.
+  type: string
+
+- name: securityScanTargetName
+  displayName: Target Name to be given for Static code security scan.
+  type: string
+  default: ''
+
+- name: staticCodeSecurityScanTargetManifestFile
+  displayName: Custom path to manifest file to test.
+  type: string
+  default: ''
+
+- name: targetFolderToCopyArtifact
+  displayName: Target Folder to copy files into. Please make sure to start the folder name with /
+  type: string
+  default: ''
+
+- name: additionalIncludedPathsInPackaging
+  displayName: List of files and directly to copy into the target folder mentioned targetFolderToCopyArtifact. Only applicable when value of targetFolderToCopyArtifact is set except default.
+  type: string
+  default: |
+    package*.json
+    ecosystem.config.js
+
+## TODO: We will add step for using Azure Artifcatory for pull and publish to as part of CI Process.
+steps:
+
+## Perform Node JS Build tasks
+- template: internal-templates/node/nodeApplicationBuild/v1.0/nodeApplicationBuild.yaml@ci-templates
+  parameters:
+    nodeVersion: ${{parameters.nodeVersion}}
+    npmFeed: LennarCorp
+
+## Perform Static code analysis for Node JS applications
+- template: internal-templates/node/performNodeJSStaticCodeAnalysis/v1.0/performNodeJSStaticCodeAnalysis.yaml@ci-templates
+  parameters:
+    cliProjectKey: ${{parameters.cliProjectKey}}
+    cliSources: ${{parameters.sastCliSources}}
+
+## Perform Static Security scan for Node JS applications
+## Parameter "failOnIssues" ideally should be always commented and should be passed with value as false only in rare cases as it is centralised config for all StaticWebApp/NodeJS/Java based CI
+- template: internal-templates/performStaticCodeSecurityScanning/v1.0/performStaticCodeSecurityScanning.yaml@ci-templates
+  parameters:
+    staticCodeSecurityScanProjectName: ${{parameters.staticCodeSecurityScanProjectName}}
+    targetFile: ${{parameters.staticCodeSecurityScanTargetManifestFile}}
+    securityScanTargetName: ${{parameters.securityScanTargetName}}
+    #failOnIssues: false
+
+## Packaging and Publishing Artifacts
+## TODO: To reach such folder / paths to be included as part of default file in github
+- task: CopyFiles@2
+  condition: ne('${{ parameters.targetFolderToCopyArtifact }}', '')
+  displayName: 'Copy Files to ${{parameters.targetFolderToCopyArtifact}}'
+  inputs:
+    Contents: ${{parameters.additionalIncludedPathsInPackaging}}
+    TargetFolder: $(System.DefaultWorkingDirectory)${{parameters.targetFolderToCopyArtifact}}
+
+- task: ArchiveFiles@2
+  displayName: 'Archive files'
+  inputs:
+      rootFolderOrFile: $(System.DefaultWorkingDirectory)${{parameters.targetFolderToCopyArtifact}}
+      includeRootFolder: false
+      archiveType: zip
+      archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+      replaceExistingArchive: true
+
+- task: PublishPipelineArtifact@1
+  displayName: 'Publish Pipeline Artifact'
+  inputs:
+      targetPath: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+      artifact: drop

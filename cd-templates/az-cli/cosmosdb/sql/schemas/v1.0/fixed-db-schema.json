@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "name": {"type": "string"},
+    "sharedThroughput": {"type": "string", "pattern": "yes"},
+    "autoscaleEnabled": {"type": "string", "pattern": "no"},
+    "maxThroughput": {"not": {}},
+    "throughput": {"type": "integer"},
+    "containers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "partitionKeyPath": {"type": "string"},
+          "throughput": {"not": {}},
+          "autoscaleEnabled": {"not": {}},
+          "maxThroughput": {"not": {}},
+          "indexPolicy": {"type": "object"}
+        },
+        "required": ["name", "partitionKeyPath"]
+      }
+    }
+  },
+  "required": ["name", "sharedThroughput", "containers"]
+}

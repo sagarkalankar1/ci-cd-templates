@@ -1,0 +1,59 @@
+# Purpose: Task for performing the Static code analysis
+# Required parameters:
+# cliProjectKey (String) (Required) Project Name to be given for SonarQube Scan.
+# staticCodeAnalysisServiceConnectionName (String) (Optional) Azure Service Conection name for the SAST tool
+# cliSources (String) (Required) Path of the project to scan
+# pollingTimeoutSec (String) (Optional) SonarQube Publish polling timeout in sec. Default: 300
+
+parameters:
+
+- name: cliProjectKey
+  displayName: Project Key in SAST tool
+  type: string
+
+- name: staticCodeAnalysisServiceConnectionName
+  displayName: Azure Service Conection name for the SAST tool
+  type: string
+  # NOTE : SonarQube-DevTest to be replaced with Prod Service connection later
+  default: SonarQube-DevTest
+
+- name: cliSources
+  displayName: Path of the project to scan
+  type: string
+
+- name: pollingTimeoutSec
+  displayName: SonarQube Publish polling timeout in sec
+  type: string
+  default: '300'
+
+steps:
+
+  #Sonar Qube Scan
+  - task: SonarQubePrepare@5
+    displayName: "Static Code Analysis Tool Configuration"
+    enabled: false
+    inputs:
+      SonarQube: ${{ parameters.staticCodeAnalysisServiceConnectionName }}
+      scannerMode: 'CLI'
+      configMode: 'manual'
+      cliProjectKey: "${{ parameters.cliProjectKey }}"
+      cliSources: '${{ parameters.cliSources }}'
+  
+  - powershell: |
+      $params = "$env:SONARQUBE_SCANNER_PARAMS" -replace '"sonar.branch.name":"[\w,/,-]*"\,?'
+      Write-Host "##vso[task.setvariable variable=SONARQUBE_SCANNER_PARAMS]$params"
+    displayName: "Sonarqube Branch prepare"
+    enabled: false
+
+  - task: SonarQubeAnalyze@5
+    displayName: "Static Code Analysis Tool Analysis"
+    inputs:
+      jdkversion: 'JAVA_HOME'
+    enabled: false
+
+  - task: SonarQubePublish@5
+    displayName: "Static Code Analysis Tool Publish"
+    enabled: false
+    inputs:
+      pollingTimeoutSec: '${{ parameters.pollingTimeoutSec }}'
+# Added comment to test if Sonarqube is running on commit.

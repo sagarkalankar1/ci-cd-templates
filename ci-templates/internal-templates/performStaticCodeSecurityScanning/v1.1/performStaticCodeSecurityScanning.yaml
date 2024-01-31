@@ -1,0 +1,204 @@
+# Purpose: Task is to perform the static code security scan
+# Required parameters:
+# staticCodeSecurityScanProjectName (String) (Required)  What you want to call (or already have called) this project in Static code security scan
+# securityScanTargetName
+# failOnIssues (Boolean) (Optional) Fail the build when issue is reported against Static code security scan. Deault: true
+# targetFile (String) (Optional) Custom path to manifest file to test.
+# codeScan (String) (Optional) Flag to perform Code Scan
+
+# NOTE: severity-threshold for all scans have been currently set to high. Possible values for this are: --severity-threshold=<low|medium|high>
+# NOTE: All monitor steps have been commented out temporarily
+
+parameters:
+- name: staticCodeSecurityScanProjectName
+  displayName: What you want to call (or already have called) this project in Static code security scan
+  type: string
+
+- name: securityScanTargetName
+  displayName: What you want to call (or already call) this Target in Static code security scan
+  type: string
+
+  ## Right now, we have temporarily set failOnIssues to "false" after discussion with Amado and Stephen on 2nd May 2023 to not fail build after Security scanning tool report the issue.
+  ## TODO: PLT-28678 : We need to set the failOnIssues to "true" once App Dev + Security team are on the same page to when any Security issues to be exempted
+  ## In future Security team needs to work with DevOps team and Snyk team manage that from Control Plane of Snyk instead of from this Template.
+- name: failOnIssues
+  displayName: Fail the build after issue reported by Static code security scan
+  type: boolean
+  default: false
+
+- name: targetFile
+  displayName: Custom path to manifest file to test.
+  type: string
+  default: ''
+
+- name: codeScan
+  displayName: Flag to perform Code Scan
+  type: boolean
+  default: true
+
+- name: jsonFileOutputFile
+  type: string
+  default: $(Build.ArtifactStagingDirectory)/report-$(Build.BuildId).json
+
+steps:
+- task: AzureCLI@2
+  name: settingSecurityScanThreshold
+  displayName: Set Security Scan Threshold
+  inputs:
+    azureSubscription: '$(SNYK_AKV_SERVICE_CONNECTION)'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      
+      # Priority for Severity Threshold is given as follows:
+        # - Microservice Specific Threshold: Highest Priority               { AKV Secret Name should be the value given to parameter: staticCodeSecurityScanProjectName }. Prefered format is '$(PROJECT_CODE)-$(TYPE_OF_COMPONENT)-$(COMPONENT_NAME)'
+        # - Project Level Threshhold: Second Highest Priority               { AKV Secret Name pattern: $(PROJECT_CODE) }
+        # - Default value hardcoded at template level: Last Priority        { Set as a harcoded value in tempalte }
+
+      # Note: Applications (Microservice) and Project are different, for example:
+              # Projects: gfx, dld, vly
+              # Applications: pdf, bff, lds
+
+      ################################## Severity Threshold Setting Starts Here ##################################
+      # Allowed Threshold as per Snyk Tool
+      validThresholds=("low" "medium" "high")
+
+      # Variable storing the name of the SNYK AKV where all exceptions are stored.
+      snykAkvName='delete-me-snyk-test'
+
+      appName='$(PROJECT_CODE)-$(TYPE_OF_COMPONENT)-$(COMPONENT_NAME)'
+
+      if az keyvault secret show --vault-name "$snykAkvName" --name "$appName" &>/dev/null; then
+      
+        # Microservice Specific Threshold: Highest Priority
+        
+        severityThreshold=$(az keyvault secret show --vault-name "$snykAkvName" --name "$appName" --query "value" --output tsv)
+        
+        echo "\n###################################################################################################"
+        echo " Found Microservice/App Specific Security scan threshold [$appName]=[$severityThreshold]"
+        echo "###################################################################################################\n"
+
+        # Check if severityThreshold is not in the array
+        if [[ ! " ${validThresholds[@]} " =~ " ${severityThreshold} " ]]; then
+          echo "\n###################################################################################################"
+          echo " WARNING: Found the key: [$appName], however the value:[$severityThreshold] passed is not valid as it is not from among [low|medium|high]. Therefore setting Severity Threshold as 'high'."
+          echo "###################################################################################################\n"
+          
+          severityThreshold="high"  # Set default value to "high"
+        fi
+
+      elif az keyvault secret show --vault-name "$snykAkvName" --name '$(PROJECT_CODE)' &>/dev/null; then
+
+        # Application/ Project Wide Threshhold: Second Highest Priority  
+        severityThreshold=$(az keyvault secret show --vault-name "$snykAkvName" --name '$(PROJECT_CODE)' --query "value" --output tsv)
+        
+        echo "\n###################################################################################################"
+        echo " Found Project level Security scan threshold [$(PROJECT_CODE)]=[$severityThreshold]"
+        echo "###################################################################################################\n"
+
+        # Check if severityThreshold is not in the array
+        if [[ ! " ${validThresholds[@]} " =~ " ${severityThreshold} " ]]; then
+        
+          echo "\n###################################################################################################"
+          echo " WARNING: Found the key: [$(PROJECT_CODE)], however the value:[$severityThreshold] passed is not valid as it is not from among [low|medium|high]. Therefore setting Severity Threshold as 'high'."
+          echo "###################################################################################################\n"
+          
+          severityThreshold="high"  # Set default value to "high"
+        fi
+
+      else
+
+        # Default value hardcoded at template level
+        severityThreshold="high"
+        
+        echo "\n###################################################################################################"
+        echo " No Security Threshold found for [$(PROJECT_CODE)] in AKV, Default Security scan threshold "high" is being set"
+        echo "###################################################################################################\n"
+
+      fi
+      
+      ################################## Severity Threshold Setting Ends Here ##################################
+
+      echo "##vso[task.setvariable variable=securityScanThreshold]$severityThreshold"
+
+      echo "\n###################################################################################################"
+      echo " Security scan threshold for [$(PROJECT_CODE)] of app [$appName] is set as [$severityThreshold]."
+      echo "###################################################################################################\n"
+
+- bash: |
+    curl --compressed https://static.snyk.io/cli/v1.1215.0/snyk-linux -o snyk
+    npm install -g snyk snyk-to-html
+    chmod +x ./snyk
+    mv ./snyk /usr/local/bin/
+    snyk auth $(SNYK_TOKEN)
+    snyk config set org=$(snyk_org_ID)
+  displayName: Install_Snyk
+  enabled: true
+
+- bash: |
+    snyk test --fail-on=all --file=${{parameters.targetFile}}  --json-file-output=${{parameters.jsonFileOutputFile}} --project-name=${{parameters.staticCodeSecurityScanProjectName}}
+
+    #snyk monitor --remote-repo-url=${{parameters.securityScanTargetName}} --project-name=${{parameters.staticCodeSecurityScanProjectName}}
+
+    RESULT=$?
+      snyk-to-html -o $(Build.ArtifactStagingDirectory)/results-open-source.html < $(Build.ArtifactStagingDirectory)/report-$(Build.BuildId).json
+      exit $RESULT
+
+  continueOnError: true
+  displayName: Snyk_Scanning_Fail_On
+  condition: eq(${{parameters.failOnIssues}}, True)
+  enabled: true
+
+
+- bash: |
+    appName= '$(PROJECT_CODE)-$(TYPE_OF_COMPONENT)-$(COMPONENT_NAME)'
+    echo "Performing Static Code Security Scan for [$appName] with Security Scan Threshold set as [$(securityScanThreshold)]"
+    snyk test --severity-threshold=$(securityScanThreshold) --file=${{parameters.targetFile}} --json-file-output=${{parameters.jsonFileOutputFile}} --project-name=${{parameters.staticCodeSecurityScanProjectName}}
+    
+    #snyk monitor --remote-repo-url=${{parameters.securityScanTargetName}} --project-name=${{parameters.staticCodeSecurityScanProjectName}}
+    
+    RESULT=$?
+      snyk-to-html -o $(Build.ArtifactStagingDirectory)/results-open-source.html < $(Build.ArtifactStagingDirectory)/report-$(Build.BuildId).json
+      exit $RESULT
+      
+  continueOnError: true
+  condition: eq(${{parameters.failOnIssues}}, False)
+  displayName: Snyk_Scanning
+  enabled: true
+
+  
+- task: JakubRumpca.azure-pipelines-html-report.PublishHtmlReport.PublishHtmlReport@1
+  name: publishSnykScan
+  displayName: Publish Snyk Scan
+  condition: succeededOrFailed()
+  enabled: true
+  inputs:
+    reportDir: $(Build.ArtifactStagingDirectory)/results-open-source.html
+    tabName: 'Snyk Open Source'
+
+
+- bash: |
+    appName= '$(PROJECT_CODE)-$(TYPE_OF_COMPONENT)-$(COMPONENT_NAME)'
+    echo "Performing Static Code Scan for [$appName] with Security Scan Threshold set as [$(securityScanThreshold)]."
+    snyk code test --severity-threshold=$(securityScanThreshold) --json-file-output=${{parameters.jsonFileOutputFile}} ${{parameters.targetFile}} || true
+    
+    # snyk code test --report --project-name=${{parameters.staticCodeSecurityScanProjectName}}
+    
+    RESULT=$?
+      snyk-to-html -o $(Build.ArtifactStagingDirectory)/results-code.html < $(Build.ArtifactStagingDirectory)/report-$(Build.BuildId).json
+      exit $RESULT
+      
+  continueOnError: true
+  condition: eq(${{parameters.codeScan}}, True)
+  displayName: Snyk_Code_Scanning
+  enabled: true
+
+  
+- task: JakubRumpca.azure-pipelines-html-report.PublishHtmlReport.PublishHtmlReport@1
+  name: publishSnykCodeScan
+  displayName: Publish Snyk Code Scan
+  condition: succeededOrFailed()
+  enabled: true
+  inputs:
+    reportDir: $(Build.ArtifactStagingDirectory)/results-code.html
+    tabName: 'Snyk code'

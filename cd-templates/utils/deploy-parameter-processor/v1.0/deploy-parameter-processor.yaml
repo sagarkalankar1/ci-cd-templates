@@ -1,0 +1,30 @@
+## Deploy Parameter Processor is a YAML pipeline template with a single task (PowerShell@2).
+## This task performs string manupilation processing to convert a YAML based key value pairs to the desired input required for the Azure Template Deploy task parameter ovveride parameters.
+## The desired input is in the form of -parameterName value.
+## Example:
+## Input: overrideParameters = " parameterName: value 
+##                               parameterName2: value2"
+## Post string manupilation output:
+##                                  deployParameter = "-parameterName value -parameterName2 value2"
+
+parameters:
+- name: overrideParameters
+  type: string
+
+steps:
+  - task: PowerShell@2
+    name: stringFunction
+    displayName: Creating_Parameters_For_Deployment
+    inputs:
+      targetType: 'inline'
+      script: |
+        $inputString = @"
+        ${{parameters.overrideParameters }}
+        "@
+        $newString1 = $inputString -replace "[\r\n]+$", ""
+        if ($newString1 -ne "") {
+          $newString1 = ($newString1 -split "`n") -join " -"
+          $newString1 = $newString1 -replace ": ", " "
+          $newString1 = "-" + $newString1
+        }
+        Write-Host "##vso[task.setvariable variable=deployParameter;isOutput=true;issecret=false;]$newString1"

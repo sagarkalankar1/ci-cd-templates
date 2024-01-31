@@ -1,0 +1,57 @@
+# Confluence Page Link: https://lennar.atlassian.net/wiki/spaces/PLAT/pages/673775667/Azure+what-if+Pipeline+Template
+# Purpose: Use the Azure CLI to perform a "what-if" operation, simulating the deployment specified in the Bicep template.
+# Parameters:
+# resourceGroup (String) (Optional) The target resource group where you want to deploy the resources.
+# overrideParameters (String) (Optional) Parameters to be overriden from template file.
+# csmFile (String) (Optional) Path to bicep template file (main.bicep).
+# location (String) (Optional) Location to deploy the resources into (region).
+
+
+parameters:
+  
+- name: resourceGroup
+  displayName: Resource Group
+  type: string
+
+- name: overrideParameters
+  displayName: Override Template 
+  type: string
+  default: # |
+#   templateParameter1: valueToBePassed
+#   templateParameter2: valueToBePassed
+#   ...
+#   templateParameterN: valueToBePassed
+
+- name: csmFile
+  displayName: Deployment Template Path
+  type: string
+  # default: iac-demo-app1-deployment-config/infra-as-code/bicep/sandbox/main.bicep
+
+- name: serviceConnection
+  displayName: AZURE SERVICE CONNECTION
+  type: string
+  default: $(AZURE_SERVICE_CONNECTION)
+
+
+stages:
+  - stage: Build_Plan
+    jobs:
+      - job: Prepare_IaC_Deploy_Plan
+        steps:
+
+          - checkout: self
+
+          - checkout: iacModules
+
+          - template: utils/plan-parameter-processor.yaml
+            parameters:
+              overrideParameters: ${{parameters.overrideParameters}}
+
+          - task: AzureCLI@2
+            displayName: Creating Deployment Plan
+            inputs:
+              azureSubscription: '${{parameters.serviceConnection}}'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az deployment group what-if --resource-group ${{parameters.resourceGroup}} --template-file ${{parameters.csmFile}} $(stringFunction.planParameter)

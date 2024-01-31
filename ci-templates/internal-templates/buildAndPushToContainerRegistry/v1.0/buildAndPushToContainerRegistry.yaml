@@ -1,0 +1,126 @@
+# Purpose: Azure pipeline template for CI Pipeline tasks to Build and Push Container Images to Container Registry 
+# Parameters:
+# containerImageRegistryServiceConnection (String) (Required) Container image registry service connection.
+# imageRepository (String) (Required) Container Registry Image Repository Name where container images are stored and managed.
+# dockerFilePath (String) (Required) Dockerfile path, relative to the source code directory.
+# imageTagSuffix (String) (Optional) Image Tag Suffix. Added as suffix to default tag only.
+# additionalTag (String) (Optional) Additional optional tag to be added to the Docker image.
+# dockerCliBuildArgs (String) (Optional) Docker CLI Build arguments to pass inputs or injected values to the Dockerfile.
+# dockerCliPushArgs (String) (Optional) Docker CLI Push arguments to pass it to the docker push task.
+# buildContext (String) (Optional) To locate the folder that contains everything to build docker image.
+
+parameters:
+
+- name: containerImageRegistryServiceConnection
+  displayName: Container Image Registry service connection.
+  type: string
+  default: ''
+
+- name: imageRepository
+  displayName: Container Registry Image Repository Name where container images are stored and managed.
+  type: string
+  default: ''
+
+- name: dockerFilePath
+  displayName: The path to the Dockerfile used for building the container image, relative to the source code directory.
+  type: string
+  default: ''
+
+- name: imageTagSuffix
+  displayName: (Optional) Image Tag Suffix. Added as suffix to default tag only.
+  type: string
+  default: ''
+
+- name: additionalTag
+  displayName: (Optional) 'Additional Tag.'
+  type: string
+  default: ''
+
+- name: dockerCliBuildArgs
+  displayName: (Optional) 'Docker CLI  Build Arguments.'
+  type: string
+  default: ''
+
+# Allow --all-tags will not work as we are explicitly passing tags
+- name: dockerCliPushArgs
+  displayName: (Optional) 'Docker CLI Push Arguments, Allowed Values [--quiet | ''].'
+  type: string
+  default: ''
+
+- name: buildContext
+  displayName: (Optional) 'To locate the folder that contains everything to build docker image'
+  type: string
+  default: '**'
+
+steps:
+
+# Validate additionalTag and imageTagSuffix Tag Parameters
+- script: |
+    if [[ "${{ parameters.imageTagSuffix }}" =~ [^a-zA-Z0-9_.] ]]; then
+      echo "Error: imageTagSuffix '${{ parameters.imageTagSuffix }}' contains unsupported characters. Only alphanumeric characters, underscores, and periods are allowed."
+      exit 1
+    fi
+    if [[ "${{ parameters.additionalTag }}" =~ [^a-zA-Z0-9_.] ]]; then
+      echo "Error: AdditionalTag '${{ parameters.additionalTag }}' contains unsupported characters. Only alphanumeric characters, underscores, and periods are allowed."
+      exit 1
+    fi
+  displayName: 'Validate Tag Parameters'
+
+# Generate Tag. eg. 20230823_100526_63b6aee_77594
+- task: PowerShell@2
+  displayName: 'Generate Tag'
+  inputs:
+    targetType: 'inline'
+    script: |
+      $currentDateTime = Get-Date -Format "yyyyMMdd_HHmmss"
+      $shortCommitHash = "$(Build.SourceVersion)".Substring(0, 7)
+
+      $imageTagSuffix = '${{ parameters.imageTagSuffix }}'
+
+      if (${imageTagSuffix} -ne '') {
+        $imageTag = "${currentDateTime}_${shortCommitHash}_$(Build.BuildId)_${imageTagSuffix}"
+      } else {
+        $imageTag = "${currentDateTime}_${shortCommitHash}_$(Build.BuildId)"
+      }
+
+      Write-Host "Generated Tag: ${imageTag}"
+      Write-Host "##vso[task.setvariable variable=imageTag]${imageTag}"
+
+# Create tag.txt file
+- script: |
+    echo $(imageTag) > $(Build.ArtifactStagingDirectory)/tag.txt
+  displayName: 'Create Tag File'
+
+# Publishing Pipeline Artifacts
+- task: PublishPipelineArtifact@1
+  displayName: 'Publish Tag Artifact'
+  inputs:
+    targetPath: '$(Build.ArtifactStagingDirectory)/'
+    artifact: 'TagArtifact'
+    publishLocation: 'pipeline'
+
+# Build an image
+- task: Docker@2
+  displayName: Build
+  inputs:
+    command: 'build'
+    containerRegistry: ${{parameters.containerImageRegistryServiceConnection}}
+    repository: ${{parameters.imageRepository}}
+    dockerfile: ${{parameters.dockerFilePath}}
+    tags: |
+      $(imageTag)
+      ${{parameters.additionalTag}} 
+    arguments: '${{parameters.dockerCliBuildArgs}}'
+    buildContext: '${{parameters.buildContext}}'
+
+# Push an image to Container Registry
+- task: Docker@2
+  displayName: Push Image to Container Registry
+  inputs:
+    command: 'push'
+    containerRegistry: '${{parameters.containerImageRegistryServiceConnection}}'
+    repository: '${{parameters.imageRepository}}'
+    tags: |
+      $(imageTag)
+      ${{parameters.additionalTag}}
+    arguments: '${{parameters.dockerCliPushArgs}}'

@@ -1,0 +1,49 @@
+# Purpose: To deploy file to Storage Account
+# parameters:
+# azureSubscription (String) (Required) Azure DevOps Service Connection name
+# resourceGroup (String) (Required) Azure resource group name where Storage Account is Present
+# storageAccountName (String) (Required) Azure Storage Account Name
+# containerName (String) (Required) Container Name which is Present in Storage Account where you want to upload that Script
+# sourcePath (String) (Required) Full bash script absolute file path
+# fileName (String) (Required) Enter name of file. This name is replaced, actually the name of the file and reflects in Storage Account.
+
+parameters:
+- name: fileName
+  displayName: 'Enter the name of file. This name will be used and displayed in the Storage Account, replacing the actual file name.'
+  type: string
+  
+- name: aureServiceConnection
+  displayName: 'Name of the Azure Resource Manager service connection'
+  type: string
+
+- name: storageAccountResourceGroup
+  displayName: 'Enter the Resource Group Name where Storage Account is Present'
+  type: string
+
+- name: storageAccountName
+  displayName: 'Enter the Storage Account Name'
+  type: string
+
+- name: containerName
+  displayName: 'Enter the Container Name present in Storage Account Name'
+  type: string
+
+- name: sourcePath
+  displayName: 'Path of the file where it is stored'
+  type: string
+
+
+steps:
+  - checkout: self
+  - checkout: ci-cd-templates
+
+  - task: AzureCLI@2
+    displayName: 'Deploy File to Storage Account'
+    inputs:
+      azureSubscription: '${{ parameters.aureServiceConnection }}'
+      scriptType: 'bash'
+      scriptLocation: 'scriptPath'
+      addSpnToEnvironment: true
+      scriptPath: 'ci-cd-templates/cd-templates/storage-account/deploy-to-container/v1.1/deploy-to-container.sh'
+      arguments: |
+        -storageAccountName "${{ parameters.storageAccountName }}" -storageAccountResourceGroup "${{ parameters.storageAccountResourceGroup }}" -containerName "${{ parameters.containerName }}" -fileName "${{ parameters.fileName }}" -sourcePath "${{ parameters.sourcePath }}"

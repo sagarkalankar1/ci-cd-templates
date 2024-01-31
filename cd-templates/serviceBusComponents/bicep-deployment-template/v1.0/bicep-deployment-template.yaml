@@ -1,0 +1,118 @@
+# Purpose: Azure pipeline template for Bicep template deployment for Service Bus Components
+# Parameters:
+# environment (String) (Required) Environment to deploy to.
+# resourceGroup (String) (Optional) The target resource group where you want to deploy the resources.
+# overrideParameters (String) (Optional) Parameters to be overriden from template file.
+# csmFile (String) (Optional) Path to bicep template file (main.bicep).
+# location (String) (Optional) Location to deploy the resources into (region).
+# deploymentScope (String) (Optional) At what scope should the deployment take place.
+# deploymentMode (String) (Optional) Type of deployment of resources.
+
+
+parameters:
+#- name: environment
+#  displayName: Deploy Environmnet
+#  type: string
+  
+- name: resourceGroup
+  displayName: Resource Group
+  type: string
+
+- name: subscriptionId
+  displayName: Subscription Id
+  type: string
+
+- name: overrideParameters
+  displayName: Override Template 
+  type: string
+  default: # |
+#   templateParameter1: valueToBePassed
+#   templateParameter2: valueToBePassed
+#   ...
+#   templateParameterN: valueToBePassed
+
+- name: csmFile
+  displayName: Deployment Template Path
+  type: string
+  # default: iac-demo-app1-deployment-config/infra-as-code/bicep/sandbox/main.bicep
+
+- name: location
+  displayName: Location Of Deployment
+  type: string
+  default: 'East US'
+
+- name: serviceConnection
+  displayName: AZURE SERVICE CONNECTION
+  type: string
+  default: $(AZURE_SERVICE_CONNECTION)
+
+- name: deploymentScope
+  displayName: Scope For Template Deployment
+  type: string
+  default: Resource Group
+
+- name: deploymentMode
+  displayName: Type Of Deployment
+  default: Incremental
+  values:
+    - Validation
+    - Incremental
+
+
+stages:
+  # - stage: Build_Plan
+  #   jobs:
+  #     - job: Prepare_IaC_Deploy_Plan
+  #       steps:
+
+  #         - checkout: self
+
+  #         - checkout: iacModules
+
+  #         - template: utils/plan-parameter-processor.yaml
+  #           parameters:
+  #             overrideParameters: ${{parameters.overrideParameters}}
+
+  #         - task: AzureCLI@2
+  #           displayName: Creating Deployment Plan
+  #           inputs:
+  #             azureSubscription: '${{parameters.serviceConnection}}'
+  #             scriptType: 'bash'
+  #             scriptLocation: 'inlineScript'
+  #             inlineScript: |
+  #               az deployment group what-if --resource-group ${{parameters.resourceGroup}} --template-file ${{parameters.csmFile}} $(stringFunction.planParameter)
+
+
+  - stage: Deploy_Resources
+    jobs:
+      - deployment: Deploy_To_Environment
+        environment: IAC_$(G_PROJECT_CODE)_$(ENV_NAME)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+              - checkout: self              
+
+              - checkout: iacModules
+
+              - checkout: miscConfig
+              
+              - template: ../utils/deploy-parameter-processor.yaml
+                parameters:
+                  overrideParameters: ${{parameters.overrideParameters}}
+
+              - task: AzureResourceManagerTemplateDeployment@3
+                displayName: Deploying Resources
+                inputs:
+                  deploymentScope: '${{parameters.deploymentScope}}'
+                  azureResourceManagerConnection: '${{parameters.serviceConnection}}'
+                  subscriptionId: '${{parameters.subscriptionId}}'
+                  action: 'Create Or Update Resource Group'
+                  resourceGroupName: '${{parameters.resourceGroup}}'
+                  location: '${{parameters.location}}'
+                  templateLocation: 'Linked artifact'
+                  ## TODO: Find a way to run all bicep files under this folder: ${{parameters.csmFile}}/${{parameters.environment}}/
+                  csmFile: '${{parameters.csmFile}}'
+                  overrideParameters: '$(stringFunction.deployParameter)'
+                  deploymentMode: '${{parameters.deploymentMode}}'
+

@@ -1,0 +1,90 @@
+parameters: 
+  - name: workingDirectory
+    displayName: Name of the directory where the module call will be done
+  
+  - name: backendType
+    displayName: Name of the Azure backend
+    default: 'azurerm'
+
+  - name: backendServiceArm
+    displayName: Name of the Azure backend service
+
+  - name: backendAzureRmSubscriptionId
+    displayName: Subscription ID
+
+  - name: commandOptions
+    displayName:  Command Line Arguments
+  
+  - name: initCommandOptions
+    displayName:  Command Line Arguments for Terraform init
+
+  - name: environmentServiceName
+    displayName: Sevice Name
+
+  - name: providerAzureRmSubscriptionId
+    displayName: Subscription ID
+
+steps:
+  - checkout: self
+  - checkout: iac-modules
+  - checkout: ci-cd-templates
+  - checkout: corp-devops-deployment-config
+  
+  - task: TerraformInstaller@2
+    inputs:
+      terraformVersion: '1.6.4'
+
+  - task: TerraformCLI@2
+    displayName: 'Terraform Version'
+    inputs:
+      command: 'version'
+      workingDirectory: '${{parameters.workingDirectory}}'
+      allowTelemetryCollection: true
+
+  - task: TerraformCLI@2
+    displayName: 'Terraform Init'
+    inputs:
+      command: 'init'
+      workingDirectory: '${{parameters.workingDirectory}}'
+      commandOptions: '${{parameters.initCommandOptions}}'
+      backendType: '${{parameters.backendType}}'
+      backendServiceArm: '${{parameters.backendServiceArm}}'
+      backendAzureRmSubscriptionId: '${{parameters.backendAzureRmSubscriptionId}}'
+      allowTelemetryCollection: true
+
+  - task: TerraformCLI@2
+    displayName: 'Terraform Outputs'
+    inputs:
+      command: 'output'
+      workingDirectory: '${{parameters.workingDirectory}}'
+      allowTelemetryCollection: true
+
+  - task: TerraformCLI@2
+    displayName: 'Terraform Plan'
+    inputs:
+      command: 'plan'
+      workingDirectory: '${{parameters.workingDirectory}}'
+      environmentServiceName: '${{parameters.environmentServiceName}}'
+      providerAzureRmSubscriptionId: '${{parameters.providerAzureRmSubscriptionId}}'
+      commandOptions: '${{parameters.commandOptions}}'
+      allowTelemetryCollection: true
+      
+  - task: TerraformCLI@2
+    displayName: 'Terraform Apply'
+    inputs:
+      command: 'apply'
+      workingDirectory: '${{parameters.workingDirectory}}'
+      environmentServiceName: '${{parameters.environmentServiceName}}'
+      providerAzureRmSubscriptionId: '${{parameters.providerAzureRmSubscriptionId}}'
+      commandOptions: '${{parameters.commandOptions}}'
+      allowTelemetryCollection: true
+
+  # - task: TerraformCLI@2
+  #   displayName: 'Terraform Destroy'
+  #   inputs:
+  #     command: 'destroy'
+  #     workingDirectory: '${{parameters.workingDirectory}}'
+  #     environmentServiceName: '${{parameters.environmentServiceName}}'
+  #     providerAzureRmSubscriptionId: '${{parameters.providerAzureRmSubscriptionId}}'
+  #     commandOptions: '${{parameters.commandOptions}}'
+  #     allowTelemetryCollection: true

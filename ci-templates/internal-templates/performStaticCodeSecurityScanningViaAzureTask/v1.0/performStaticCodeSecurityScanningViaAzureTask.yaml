@@ -1,0 +1,48 @@
+# Purpose: Task is to perform the static code security scan
+# Required parameters:
+# failOnIssues (Boolean) (Optional) Fail the build when issue is reported against Static code security scan. Deault: true
+# monitorWhen (String) (Optional) When to monitor the Synx scan. Options: always|noIssuesFound|never , Default: always
+# serviceConnectionName (String) (Optional) Azure Service Conection name for the Static security scanner. 
+# projectName (String) (Required) What you want to call (or already have called) this project in Static code security scan.
+# targetFile (String) (Optional) Custom path to manifest file to test.
+
+parameters:
+  ## Right now, we have temporarily set failOnIssues to "false" after discussion with Amado and Stephen on 2nd May 2023 to not fail build after Security scanning tool report the issue.
+  ## TODO: PLT-28678 : We need to set the failOnIssues to "true" once App Dev + Security team are on the same page to when any Security issues to be exempted
+  ## In future Security team needs to work with DevOps team and Snyk team manage that from Control Plane of Snyk instead of from this Template.
+- name: failOnIssues
+  displayName: Fail the build after issue reported by Static code security scan
+  type: boolean
+  default: false
+
+- name: monitorWhen
+  displayName: When to monitor the Static code security scan
+  type: string
+  default: always
+
+- name: staticCodeSecurityScanServiceConnectionName
+  displayName: Azure Service Conection name for the Static code security scanner
+  type: string
+  default: SnykServiceConnectionTemp
+
+- name: staticCodeSecurityScanProjectName
+  displayName: What you want to call (or already have called) this project in Static code security scan
+  type: string
+
+- name: targetFile
+  displayName: Custom path to manifest file to test.
+  type: string
+  default: ''
+
+steps:
+
+- task: SnykSecurityScan@1
+  displayName: 'Static code security scan'
+  enabled: false
+  inputs:
+    serviceConnectionEndpoint: '${{ parameters.staticCodeSecurityScanServiceConnectionName }}'
+    testType: 'app'
+    monitorWhen: '${{ parameters.monitorWhen }}'
+    failOnIssues: '${{ parameters.failOnIssues }}'
+    projectName: '${{ parameters.staticCodeSecurityScanProjectName }}'
+    targetFile: '${{ parameters.targetFile }}'

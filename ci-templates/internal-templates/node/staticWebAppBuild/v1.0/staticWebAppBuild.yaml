@@ -1,0 +1,89 @@
+# Purpose: Azure pipeline template for the building static web application
+# Parameter:
+# nodeVersion (String) (Required) Node version to be installed for Artifact building.
+# performNpmBuild (Boolean) (Optional) Flag to perform NPM run build step. Default: false
+
+parameters:
+
+- name: nodeVersion
+  displayName: Node version to be installed for Artifact building.
+  type: string
+
+- name: performNpmBuild
+  displayName: Flag to perform NPM run build step.
+  type: boolean
+  default: false
+
+- name: targetFolderToCopyArtifact
+  displayName: Target Folder to copy files into. Please make sure to start the folder name with /
+  type: string
+  default: ''
+
+- name: additionalIncludedPathsInPackaging
+  displayName: List of files and directly to copy into the target folder mentioned targetFolderToCopyArtifact. Only applicable when value of targetFolderToCopyArtifact is set except default.
+  type: string
+  default: |
+    **/*
+    !.git/**/*
+    !prisma/node_modules/**/*
+
+## TODO: Will add step for using Azure Artifcatory for pull and publish to as part of CI Process.`
+steps:   
+
+- task: Npm@1
+  enabled: false
+  inputs:
+    command: 'custom'
+    workingDir: '$(System.DefaultWorkingDirectory)'
+    customCommand: 'set-script prepare ""'
+
+- task: CopyFiles@2
+  condition: ne('${{ parameters.targetFolderToCopyArtifact }}', '')
+  displayName: 'Copy Files to: ${{ parameters.targetFolderToCopyArtifact }}'
+  inputs:
+    SourceFolder: '$(System.DefaultWorkingDirectory)'
+    Contents: ${{ parameters.additionalIncludedPathsInPackaging }}
+    TargetFolder: '${{ parameters.targetFolderToCopyArtifact }}'
+    OverWrite: true
+
+# Install all dependencies.
+- task: NodeTool@0
+  inputs:
+    versionSpec: ${{parameters.nodeVersion}}
+
+- task: Npm@1
+  inputs:
+    command: 'custom'
+    workingDir: '$(System.DefaultWorkingDirectory)'
+    customCommand: 'install'
+
+- task: Npm@1
+  enabled: ${{parameters.performNpmBuild}}
+  inputs:
+    command: 'custom'
+    workingDir: '$(System.DefaultWorkingDirectory)'
+    customCommand: 'run build'
+
+#Unit Test and Code Coverage
+- task : Npm@1
+  displayName: Lint scan
+  inputs:
+      command:  'custom'
+      customCommand:  "run lint"
+
+- task: Npm@1
+  displayName: Unit Test
+  inputs:
+    command: 'custom'
+    customCommand: 'run test:ci'
+
+- task: PublishTestResults@2
+  inputs:
+    testResultsFormat: 'JUnit'
+    testResultsFiles: '**/junit.xml'
+    searchFolder: '$(System.DefaultWorkingDirectory)'
+
+- task: PublishCodeCoverageResults@1
+  inputs:
+    codeCoverageTool: 'Cobertura'
+    summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage/cobertura-coverage.xml'

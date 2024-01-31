@@ -1,0 +1,200 @@
+# Purpose: This template will get invoked by each API-M instance specific Pipeline, which will manage Automation for all common objects on API-M level for that API-M instance.
+# Parameters:
+# resourceGroup (String) The target resource group where you want to deploy the resources.
+# subscriptionId (String) The target Subscription ID where you want to deploy the resources.
+# location (String) Location to deploy the resources into (region).
+# csmFileProduct (String) The File path to Products deployment Bicep.
+# csmFileBackend (String) The File path to Backends deployment Bicep.
+# csmFileSubscription (String) The File path to Subscriptions deployment Bicep.
+# csmFileNameValue (String) The File path to Name Value Pairs deployment Bicep.
+# csmFilePolicyFragments (String) The File path to Policy Fragments deployment Bicep.
+# serviceConnection (String) (Optional) The Azure Service Connection used for deployment.
+# deploymentScope (String) (Optional) At what scope should the deployment take place.
+# deploymentMode (String) (Optional) Type of deployment of resources.
+
+parameters:
+- name: resourceGroup
+  displayName: Resource Group
+  type: string
+
+- name: subscriptionId
+  displayName: Subscription Id
+  type: string
+
+- name: location
+  displayName: Location Of Deployment
+  type: string
+  default: 'East US'
+
+- name: csmFileProduct
+  displayName: File path to the Products Bicep
+  type: string
+
+- name: csmFileBackend
+  displayName: File path to the Backends Bicep
+  type: string
+
+- name: csmFileSubscription
+  displayName: File path to the Subscriptions Bicep
+  type: string
+
+- name: csmFileNameValue
+  displayName: File path to the Name Value Pairs Bicep
+  type: string
+
+- name: csmFilePolicyFragments
+  displayName: File path to the Policy Fragments Bicep
+  type: string
+
+- name: serviceConnection
+  displayName: AZURE SERVICE CONNECTION
+  type: string
+  default: $(AZURE_SERVICE_CONNECTION)
+
+- name: deploymentScope
+  displayName: Scope For Template Deployment
+  type: string
+  default: Resource Group
+
+- name: deploymentMode
+  displayName: Type Of Deployment
+  default: Incremental
+  values:
+    - Validation
+    - Incremental
+
+- name: apimName
+  displayName: API-M Instance Name
+  type: string
+
+- name: policyFilePath
+  displayName: Policy File Path 
+  type: string
+
+- name: fileFormat
+  displayName: Format of the Policy File
+  type: string
+  default: application/vnd.ms-azure-apim.policy+xml
+  values: 
+    - application/vnd.ms-azure-apim.policy+xml
+    - application/vnd.ms-azure-apim.policy.raw+xml
+
+stages:
+
+  - stage: Create_Products
+    jobs:
+      - job: 
+        steps:
+          - checkout: self              
+
+          - checkout: iacModules
+
+          - task: AzureResourceManagerTemplateDeployment@3
+            displayName: Deploying Products
+            inputs:
+              deploymentScope: '${{parameters.deploymentScope}}'
+              azureResourceManagerConnection: '${{parameters.serviceConnection}}'
+              subscriptionId: '${{parameters.subscriptionId}}'
+              action: 'Create Or Update Resource Group'
+              resourceGroupName: '${{parameters.resourceGroup}}'
+              location: '${{parameters.location}}'
+              templateLocation: 'Linked artifact'
+              csmFile: '${{parameters.csmFileProduct}}'
+              deploymentMode: '${{parameters.deploymentMode}}'
+
+
+  - stage: Create_Backends
+    jobs:
+      - job: 
+        steps:
+          - checkout: self              
+
+          - checkout: iacModules
+
+          - task: AzureResourceManagerTemplateDeployment@3
+            displayName: Deploying Backends
+            inputs:
+              deploymentScope: '${{parameters.deploymentScope}}'
+              azureResourceManagerConnection: '${{parameters.serviceConnection}}'
+              subscriptionId: '${{parameters.subscriptionId}}'
+              action: 'Create Or Update Resource Group'
+              resourceGroupName: '${{parameters.resourceGroup}}'
+              location: '${{parameters.location}}'
+              templateLocation: 'Linked artifact'
+              csmFile: '${{parameters.csmFileBackend}}'
+              deploymentMode: '${{parameters.deploymentMode}}'
+
+
+  - stage: Create_Subscriptions
+    jobs:
+      - job: 
+        steps:
+          - checkout: self              
+
+          - checkout: iacModules
+
+          - task: AzureResourceManagerTemplateDeployment@3
+            displayName: Deploying Subscriptions
+            inputs:
+              deploymentScope: '${{parameters.deploymentScope}}'
+              azureResourceManagerConnection: '${{parameters.serviceConnection}}'
+              subscriptionId: '${{parameters.subscriptionId}}'
+              action: 'Create Or Update Resource Group'
+              resourceGroupName: '${{parameters.resourceGroup}}'
+              location: '${{parameters.location}}'
+              templateLocation: 'Linked artifact'
+              csmFile: '${{parameters.csmFileSubscription}}'
+              deploymentMode: '${{parameters.deploymentMode}}'
+
+
+  - stage: Create_Named_Value_Pairs
+    jobs:
+      - job: 
+        steps:
+          - checkout: self              
+
+          - checkout: iacModules
+
+          - task: AzureResourceManagerTemplateDeployment@3
+            displayName: Deploying Named Value Pairs
+            inputs:
+              deploymentScope: '${{parameters.deploymentScope}}'
+              azureResourceManagerConnection: '${{parameters.serviceConnection}}'
+              subscriptionId: '${{parameters.subscriptionId}}'
+              action: 'Create Or Update Resource Group'
+              resourceGroupName: '${{parameters.resourceGroup}}'
+              location: '${{parameters.location}}'
+              templateLocation: 'Linked artifact'
+              csmFile: '${{parameters.csmFileNameValue}}'
+              deploymentMode: '${{parameters.deploymentMode}}'
+
+
+  - stage: Create_Policy_Fragments
+    jobs:
+      - job: 
+        steps:
+          - checkout: self              
+
+          - checkout: iacModules
+
+          - task: AzureResourceManagerTemplateDeployment@3
+            displayName: Deploying Policy Fragments
+            inputs:
+              deploymentScope: '${{parameters.deploymentScope}}'
+              azureResourceManagerConnection: '${{parameters.serviceConnection}}'
+              subscriptionId: '${{parameters.subscriptionId}}'
+              action: 'Create Or Update Resource Group'
+              resourceGroupName: '${{parameters.resourceGroup}}'
+              location: '${{parameters.location}}'
+              templateLocation: 'Linked artifact'
+              csmFile: '${{parameters.csmFilePolicyFragments}}'
+              deploymentMode: '${{parameters.deploymentMode}}'
+
+
+  - template: deploy-apim-level-policy.yaml
+    parameters: 
+      apimResourceGroup: ${{parameters.resourceGroup}}
+      azureServiceConnection: ${{parameters.serviceConnection}}
+      apimName: ${{parameters.apimName}}
+      policyFilePath: ${{parameters.policyFilePath}}
+      fileFormat: ${{parameters.fileFormat}}

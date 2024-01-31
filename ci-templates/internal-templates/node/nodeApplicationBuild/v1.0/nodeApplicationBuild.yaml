@@ -1,0 +1,70 @@
+# Purpose: Azure pipeline template for the Node JS application build steps.
+# Parameters:
+# nodeVersion (String) (Required) Node version to be installed for Artifact building.
+# npmFeed (String) (Optional) Name of the Node Feed to pull packages from.
+
+parameters:
+
+- name: nodeVersion
+  displayName: Node version to be installed for Artifact building.
+  type: string
+
+- name: npmFeed
+  displayName: Node feed to be used.
+  type: string
+  default: 'LennarCorp'
+
+steps:
+
+- task: NodeTool@0
+  displayName: 'Install Node.js'
+  inputs:
+    versionSpec: "${{parameters.nodeVersion}}"
+
+- script: echo -e "registry=https://pkgs.dev.azure.com/LennarCorp/_packaging/{{NPM_FEED}}/npm/registry/\nalways-auth=true" > $(System.DefaultWorkingDirectory)/.npmrc
+  displayName: 'Create npmrc'
+
+- task: PowerShell@2
+  displayName: Replace Feed Name in .npmrc
+  inputs:
+    targetType: 'inline'
+    script: '((Get-Content -path ".npmrc" -Raw) -replace "{{NPM_FEED}}", "${{parameters.npmFeed}}") | Set-Content -Path ".npmrc"'
+
+- task: npmAuthenticate@0
+  inputs:
+    workingFile: "$(System.DefaultWorkingDirectory)/.npmrc"
+
+- bash: |
+   npm install --lockfile-version=2
+   npm run build
+  displayName: 'NPM Install and Build'
+
+#Unit Test and Code Coverage
+- task : Npm@1
+  enabled: true
+  displayName: Lint scan
+  inputs:
+      command:  'custom'
+      customCommand:  "run lint"
+
+- task: Npm@1
+  enabled: true
+  displayName: Unit Test
+  inputs:
+    command: 'custom'
+    customCommand: 'run test'
+
+- task: PublishTestResults@2
+  displayName: 'Publish Test Results'
+  enabled: true
+  inputs:
+    testResultsFormat: 'JUnit'
+    testResultsFiles: '**/junit.xml'
+    searchFolder: '$(System.DefaultWorkingDirectory)'
+ 
+- task: PublishCodeCoverageResults@1
+  displayName: 'Publish Code Coverage Results'
+  enabled: true
+  inputs:
+    codeCoverageTool: 'Cobertura'
+    summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage/cobertura-coverage.xml'

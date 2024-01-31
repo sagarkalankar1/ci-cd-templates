@@ -1,0 +1,88 @@
+# Purpose: Azure pipeline template for the Static Web App CI Pipeline tasks
+# Parameters:
+# cliProjectKey (String) (Required) Project Name to be given for SAST Scan.
+# nodeVersion (String) (Required) Node version to be installed for Artifact building.
+# sastCliSources (String) (Required) Path of the project to scan
+# staticCodeSecurityScanProjectName (String) (Required) Project Name to be given for Static Security Scan.
+# securityScanTargetName (String) (Required) Target Name to be given for Static Security Scan.
+# staticCodeSecurityScanTargetManifestFile (String) (Optional) Custom path to manifest file to test.
+# targetFolderToCopyArtifact (String) (Optional) Target Folder to copy files into.
+
+parameters:
+
+- name: cliProjectKey
+  displayName: Project Name to be given for SAST Scan.
+  type: string
+
+- name: nodeVersion
+  displayName: Node version to be installed for Artifact building.
+  type: string
+
+- name: sastCliSources
+  displayName: Path of the project to scan
+  type: string
+  
+- name: staticCodeSecurityScanProjectName
+  displayName: Project Name to be given for Static code security scan.
+  type: string
+
+- name: securityScanTargetName
+  displayName: Target Name to be given for Static code security scan.
+  type: string
+  default: ''
+
+- name: staticCodeSecurityScanTargetManifestFile
+  displayName: Custom path to manifest file to test.
+  type: string
+  default: ''
+
+- name: targetFolderToCopyArtifact
+  displayName: Target Folder to copy files into. Please make sure to start the folder name with /
+  type: string
+  default: '$(Build.ArtifactStagingDirectory)'
+
+- name: additionalIncludedPathsInPackaging
+  displayName: List of files and directly to copy into the target folder mentioned targetFolderToCopyArtifact. Only applicable when value of targetFolderToCopyArtifact is set except default.
+  type: string
+  default: |
+    **/*
+    !.git/**/*
+    !prisma/node_modules/**/*
+
+steps:
+
+## Perform Node JS Build tasks
+- template: internal-templates/node/staticWebAppBuild/v1.0/staticWebAppBuild.yaml@ci-templates
+  parameters:
+    nodeVersion: ${{parameters.nodeVersion}}
+    targetFolderToCopyArtifact: ${{parameters.targetFolderToCopyArtifact}}
+    additionalIncludedPathsInPackaging: ${{parameters.additionalIncludedPathsInPackaging}}
+
+## Perform Static code analysis for Node JS applications
+- template: internal-templates/node/performNodeJSStaticCodeAnalysis/v1.0/performNodeJSStaticCodeAnalysis.yaml@ci-templates
+  parameters:
+    cliProjectKey: ${{parameters.cliProjectKey}}
+    cliSources: ${{parameters.sastCliSources}}
+
+## Perform Static Security scan for Node JS applications. 
+## Parameter "failOnIssues" ideally should be always commented and should be passed with value as false only in rare cases as it is centralised config for all StaticWebApp/NodeJS/Java based CI
+- template: internal-templates/performStaticCodeSecurityScanning/v1.0/performStaticCodeSecurityScanning.yaml@ci-templates
+  parameters:
+    staticCodeSecurityScanProjectName: ${{parameters.staticCodeSecurityScanProjectName}}
+    targetFile: ${{parameters.staticCodeSecurityScanTargetManifestFile}}
+    securityScanTargetName: ${{parameters.securityScanTargetName}}
+    #failOnIssues: false
+
+#Packaging and Publishing Artifacts
+- task: ArchiveFiles@2
+  enabled: true
+  inputs:
+    rootFolderOrFile: '${{parameters.targetFolderToCopyArtifact}}'
+    includeRootFolder: false
+    archiveType: 'zip'
+    archiveFile: '${{parameters.targetFolderToCopyArtifact}}/app.zip'
+    replaceExistingArchive: true
+
+- publish: ${{parameters.targetFolderToCopyArtifact}}
+  artifact: drop
+  

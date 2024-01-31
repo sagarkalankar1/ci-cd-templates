@@ -1,0 +1,42 @@
+# This template will be invoked to deploy an API Operation level policy.
+
+parameters:
+  - name: apimResourceGroup
+    displayName: API-M Instance Resource Group Name
+    type: string
+  
+  - name: apimName
+    displayName: API-M Instance Name
+    type: string
+
+  - name: apiId
+    displayName: API ID for which Policy is to be deployed
+    type: string
+
+  - name: operationsPolicyMetadata
+    displayName: Stores Metadata for all operation level Policies
+    type: string
+  
+  - name: azureServiceConnection
+    displayName: Service Connection used for task
+    type: string
+
+
+stages:
+  - stage: Import_Operations_Policies
+    jobs:
+      - job: 
+        steps:
+          - checkout: API_SPEC_DEFINITION_REPO
+            path: $(API_SPEC_DEFINITION_REPO_Folder_Path)
+          
+          - checkout: CI_CD_Templates
+            path: $(CI_CD_Templates_Folder_Path)
+
+          - task: AzurePowerShell@5
+            inputs:
+              azureSubscription: '${{parameters.azureServiceConnection}}'
+              ScriptType: 'FilePath'
+              ScriptPath: '$(CI_CD_Templates_Folder_Path)/cd-templates/apim/deploy-api-operations-policies.ps1'
+              ScriptArguments: '-yamlFilePath "${{parameters.operationsPolicyMetadata}}" -apimResourceGroup "${{parameters.apimResourceGroup}}" -apimName "${{parameters.apimName}}" -apiId "${{parameters.apiId}}"'
+              azurePowerShellVersion: 'LatestVersion'

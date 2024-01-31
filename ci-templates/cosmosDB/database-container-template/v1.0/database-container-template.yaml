@@ -1,0 +1,117 @@
+# Purpose: Azure pipeline template for the CosmosDB Database and Container Pipeline tasks
+# Parameters:
+# sourceDirectory (String) (Required) Relative path to the source directory.
+# cosmosDBMetadataJsonnetPath (String) (Required) Relative path to the Jsonnet file for CosmosDB metadata.
+# cosmosDBTargetFolder (String) (Required) Target folder for CosmosDB files in the artifact staging directory.
+# cosmosDBSchemaAndScriptFolder (String) (Required) Relative path to the folder containing CosmosDB schema and script files.
+# cosmosDBAdditionalIncludedPaths (String) (Optional) List of additional file paths to copy into the CosmosDB target folder.
+
+parameters: 
+- name: sourceDirectory
+  displayName: 'Relative path to the source directory'
+  type: string
+  default: 'demo-app-1-misc-config/bff/databases/cosmosDB/sandbox/lnos-demo-app1-cosno-sb'
+
+- name: cosmosDBMetadataJsonnetPath
+  displayName: 'Relative path to the Jsonnet file for CosmosDB metadata'
+  type: string
+  default: 'demo-app-1-misc-config/bff/databases/cosmosDB/sandbox/lnos-demo-app1-cosno-sb/database-containers-metadata.jsonnet'
+
+- name: cosmosDBTargetFolder
+  displayName: 'Target folder for CosmosDB files in the artifact staging directory'
+  type: string
+  default: '$(Build.ArtifactStagingDirectory)'
+
+- name: cosmosDBSchemaAndScriptFolder
+  displayName: 'Relative path to the folder containing CosmosDB schema and script files'
+  type: string
+  default: 'ci-cd-templates/cd-templates/az-cli/cosmosdb/sql'
+
+- name: cosmosDBSchemaFolder
+  displayName: 'Relative path to the folder containing CosmosDB schema and script files'
+  type: string
+  default: 'ci-cd-templates/cd-templates/az-cli/cosmosdb/sql/schemas/v1.0'
+
+- name: cosmosDBAdditionalIncludedPaths
+  displayName: 'List of additional file paths to copy into the CosmosDB target folder'
+  type: string
+  default: |
+    *schema.json
+    *.sh
+
+steps:
+
+- checkout: self
+
+- checkout: cd-templates
+
+- checkout: containerDBMetaDataRepo
+
+- script: |
+    sudo apt install jsonnet
+    jsonnet -v
+  displayName: 'Install Jsonnet'
+
+- task: Bash@3
+  displayName: 'Create JSON'
+  inputs:
+    targetType: 'inline'
+    script: |
+      jsonnet "$(Build.SourcesDirectory)/${{ parameters.cosmosDBMetadataJsonnetPath }}" > "${{ parameters.cosmosDBTargetFolder }}/database-containers-metadata.json"
+      
+      echo Generated JSON file:
+      cat "${{ parameters.cosmosDBTargetFolder }}/database-containers-metadata.json"
+    failOnStderr: true
+
+- task: CopyFiles@2
+  displayName: 'Copy JSON files'
+  inputs:
+    SourceFolder: '${{parameters.sourceDirectory}}'
+    Contents: '*.json'
+    TargetFolder: '${{parameters.cosmosDBTargetFolder}}'
+
+- task: CopyFiles@2
+  displayName: 'Copy Schema files'
+  inputs:
+    SourceFolder: ${{parameters.cosmosDBSchemaFolder}}
+    Contents: '*.json'
+    TargetFolder: '${{parameters.cosmosDBTargetFolder}}'
+
+- task: CopyFiles@2
+  displayName: 'Copy Script files'
+  inputs:
+    SourceFolder: ${{parameters.cosmosDBSchemaAndScriptFolder}}
+    Contents: '${{parameters.cosmosDBAdditionalIncludedPaths}}'
+    TargetFolder: '${{parameters.cosmosDBTargetFolder}}'
+
+- task: Bash@3    
+  displayName: 'List copied files in Staging Directory'
+  inputs:
+    targetType: 'inline'
+    script: |
+      cd ${{parameters.cosmosDBTargetFolder}}
+      pwd
+      ls -l ${{parameters.cosmosDBTargetFolder}}
+
+- task: PowerShell@2
+  displayName: 'Validate JSON files'
+  inputs:
+    filePath: 'ci-cd-templates/ci-templates/cosmosDB/schema-validator/v1.0/schema-validator.ps1'
+    arguments: '-filePathPrefix "${{parameters.cosmosDBTargetFolder}}"'
+    failOnStderr: true
+    pwsh: true
+
+
+- task: ArchiveFiles@2
+  enabled: false
+  inputs:
+    rootFolderOrFile: '${{parameters.cosmosDBTargetFolder}}'
+    includeRootFolder: false
+    archiveType: 'zip'
+    archiveFile: '${{parameters.cosmosDBTargetFolder}}/$(Build.BuildId).zip'
+    replaceExistingArchive: true
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: '${{parameters.cosmosDBTargetFolder}}'
+    ArtifactName: 'drop'

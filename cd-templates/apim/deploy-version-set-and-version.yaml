@@ -1,0 +1,95 @@
+# This Yaml Template is used to Create a Version Set, a Version, and link products to the version.
+
+parameters:
+- name: serviceConnection
+  displayName: AZURE SERVICE CONNECTION
+  type: string
+
+- name: resourceGroup
+  displayName: Resource Group
+  type: string
+
+- name: apimName
+  displayName: APIM Name
+  type: string
+
+- name: versionSetId
+  displayName: Version Set ID
+  type: string
+
+- name: version
+  displayName: Version to create
+  type: string
+
+# Query and Header Schema yet to be added.
+- name: versioningSchema
+  displayName: Versioning Schema Versioning Schema [Segment, Query (Not supported yet), Header (Not supported yet)]
+  type: string
+  # values:
+  #     - Segment
+  #     # - Query
+  #     # - Header
+
+# Product values to be passed as "'product1', 'product2', 'product3'"
+- name: products
+  displayName: Products To Link ["product1", "product2", "product3"]
+  type: string
+  
+- name: apiPath
+  displayName: API Path
+  type: string
+
+- name: specificationFormat
+  displayName: Specification Format
+  type: string
+
+- name: specificationPath
+  displayName: Specification Path
+  type: string
+
+# apiID == versionSetID-${version} 
+
+stages:
+  - stage: Create_Version_Set
+    jobs:
+      - job:
+        steps:
+        - task: AzureCLI@2
+          inputs:
+            azureSubscription: '${{parameters.serviceConnection}}'
+            scriptType: 'pscore'
+            scriptLocation: 'inlineScript'
+            inlineScript: |
+                  az apim api versionset create --resource-group ${{parameters.resourceGroup}} --service-name ${{parameters.apimName}} --version-set-id ${{parameters.versionSetId}} --versioning-scheme ${{parameters.versioningSchema}} --display-name ${{parameters.versionSetId}}
+
+  
+  - stage: Create_Version
+    jobs:
+      - job:
+        steps:
+        - task: AzureCLI@2
+          inputs:
+            azureSubscription: '${{parameters.serviceConnection}}'
+            scriptType: 'pscore'
+            scriptLocation: 'inlineScript'
+            inlineScript: |
+                  az apim api import --path ${{parameters.apiPath}} --resource-group ${{parameters.resourceGroup}} --service-name ${{parameters.apimName}}  --specification-format ${{parameters.specificationFormat}} --specification-path ${{parameters.specificationPath}} --api-version-set-id ${{parameters.versionSetId}} --api-version ${{parameters.version}} --api-id ${{parameters.versionSetId}}-${{parameters.version}}
+
+
+  - stage: Link_Products
+    jobs:
+      - job: 
+        steps:
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: '${{parameters.serviceConnection}}'
+              scriptType: 'pscore'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                [String[]]$products = ${{parameters.products}}
+
+                for ($i = 0 ; $i -lt $products.Length ; $i++)
+                {
+                    az apim product api add --resource-group ${{parameters.resourceGroup}} --service-name ${{parameters.apimName}}  --product-id $products[$i]  --api-id ${{parameters.versionSetId}}-${{parameters.version}}
+                }
+

@@ -1,0 +1,63 @@
+# This template will be invoked to deploy an API level policy.
+
+parameters:
+  - name: apimResourceGroup
+    displayName: API-M Instance Resource Group Name
+    type: string
+  
+  - name: apimName
+    displayName: API-M Instance Name
+    type: string
+
+  - name: apiId
+    displayName: API ID for which Policy is to be deployed
+    type: string
+
+  - name: policyFilePath
+    displayName: Policy File Path 
+    type: string
+  
+  - name: azureServiceConnection
+    displayName: Service Connection used for task
+    type: string
+
+  - name: fileFormat
+    displayName: Format of the Policy File
+    type: string
+    default: "application/vnd.ms-azure-apim.policy+xml"
+    values: 
+      - "application/vnd.ms-azure-apim.policy+xml"
+      - "application/vnd.ms-azure-apim.policy.raw+xml"
+
+stages:
+  - stage: Import_API_Policy
+    jobs:
+      - job: 
+        steps:
+          - checkout: self
+
+          - checkout: API_SPEC_DEFINITION_REPO
+            path: $(API_SPEC_DEFINITION_REPO_Folder_Path)
+
+          - task: AzurePowerShell@5
+            inputs:
+              azureSubscription: '${{parameters.azureServiceConnection}}'
+              ScriptType: 'InlineScript'
+              azurePowerShellVersion: 'LatestVersion'
+              Inline: |
+                Install-Module Az.ApiManagement -force
+                
+                        Write-Host "${{parameters.apiId}}"
+                        Write-Host "${{parameters.fileFormat}}"
+                        Write-Host "${{parameters.policyFilePath}}"
+                
+                        # Create Context for API Management Policy command, can be interpreted as APIM ID Generator
+                
+                        $apimContext = New-AzApiManagementContext -ResourceGroupName "${{parameters.apimResourceGroup}}" -ServiceName "${{parameters.apimName}}"
+                
+                        #
+                        
+                
+                        # Attach API Level Policy
+                
+                        Set-AzApiManagementPolicy -Context $apimContext -ApiId "${{parameters.apiId}}" -Format "${{parameters.fileFormat}}" -PolicyFilePath "${{parameters.policyFilePath}}"

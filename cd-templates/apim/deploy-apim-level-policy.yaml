@@ -1,0 +1,46 @@
+# This template will be invoked to deploy an API Management level policy.
+
+parameters:
+  - name: apimResourceGroup
+    displayName: API-M Instance Resource Group Name
+    type: string
+  
+  - name: apimName
+    displayName: API-M Instance Name
+    type: string
+
+  - name: policyFilePath
+    displayName: Policy File Path 
+    type: string
+  
+  - name: azureServiceConnection
+    displayName: Service Connection used for task
+    type: string
+
+  - name: fileFormat
+    displayName: Format of the Policy File
+    type: string
+    default: application/vnd.ms-azure-apim.policy+xml
+    values: 
+      - application/vnd.ms-azure-apim.policy+xml
+      - application/vnd.ms-azure-apim.policy.raw+xml
+
+stages:
+  - stage: Import_APIM_Level_Policy
+    jobs:
+      - job: 
+        steps:
+          - task: AzurePowerShell@5
+            inputs:
+              azureSubscription: '${{parameters.azureServiceConnection}}'
+              ScriptType: 'InlineScript'
+              azurePowerShellVersion: 'LatestVersion'
+              pwsh: true
+              Inline: |
+                Install-Module -Name Az.ApiManagement -Scope CurrentUser -Force
+                # Create Context for API Management Policy command, can be interpreted as APIM ID Generator
+                $apimContext = New-AzApiManagementContext -ResourceGroupName "${{parameters.apimResourceGroup}}" -ServiceName "${{parameters.apimName}}"
+                #
+                # Create API Management Level Policy
+                Write-Host $apimContext
+                Set-AzApiManagementPolicy -Context $apimContext -PolicyFilePath "$(System.DefaultWorkingDirectory)/${{parameters.policyFilePath}}"

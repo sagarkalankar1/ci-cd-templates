@@ -1,0 +1,99 @@
+# Purpose: Azure pipeline template for CI Pipeline tasks to Build and Push Docker Images to Azure Container Registry 
+# Parameters:
+# cliProjectKey (String) (Required) Project Name to be given for SAST Scan.
+# nodeVersion (String) (Required) Node version to be installed for Artifact building.
+# sastCliSources (String) (Required) Path of the project to scan
+# staticCodeSecurityScanProjectName (String) (Required) Project Name to be given for Snyk Scan.
+# staticCodeSecurityScanTargetManifestFile (String) (Optional) Custom path to manifest file to test.
+# containerImageRegistryServiceConnection (String) (Required) Container image registry service connection.
+# imageRepository (String) (Required) Container Registry Image Repository Name where container images are stored and managed.
+# dockerFilePath (String) (Required) Dockerfile path, relative to the source code directory.
+# imageTagSuffix (String) (Optional) Image Tag Suffix. Added as suffix to default tag only.
+# additionalTag (String) (Optional) Additional optional tag to be added to the Docker image.
+# dockerCliBuildArgs (String) (Optional) Docker CLI Build arguments to pass inputs or injected values to the Dockerfile.
+
+parameters:
+
+- name: cliProjectKey
+  displayName: Project Name to be given for SAST Scan.
+  type: string
+
+- name: nodeVersion
+  displayName: Node version to be installed for Artifact building.
+  type: string
+
+- name: sastCliSources
+  displayName: Path of the project to scan
+  type: string
+  
+- name: staticCodeSecurityScanProjectName
+  displayName: Project Name to be given for Static code security scan.
+  type: string
+
+- name: staticCodeSecurityScanTargetManifestFile
+  displayName: Custom path to manifest file to test.
+  type: string
+  default: ''
+
+- name: containerImageRegistryServiceConnection
+  displayName: Container Image Registry service connection.
+  type: string
+  default: ''
+
+- name: imageRepository
+  displayName: Container Registry Image Repository Name where container images are stored and managed.
+  type: string
+  default: ''
+
+- name: dockerFilePath
+  displayName: The path to the Dockerfile used for building the container image, relative to the source code directory.
+  type: string
+  default: ''
+
+- name: imageTagSuffix
+  displayName: (Optional) Image Tag Suffix. Added as suffix to default tag only.
+  type: string
+  default: ''
+
+- name: additionalTag
+  displayName: (Optional) 'Additional Tag.'
+  type: string
+  default: ''
+
+- name: dockerCliBuildArgs
+  displayName: CLI Build Arguments
+  type: string
+  default: ''
+
+steps:
+
+## Perform Node JS Build tasks
+- template: ../../internal-templates/node/nodeApplicationBuild.yaml@ci-templates
+  parameters:
+    nodeVersion: ${{parameters.nodeVersion}}
+
+##TODO: Add back when Sonar and Snyk are working JIRA: PLT-35303
+# ## Perform Static code analysis for Node JS applications
+# - template: ../../internal-templates/node/performNodeJSStaticCodeAnalysis/v1.0/performNodeJSStaticCodeAnalysis.yaml
+#   parameters:
+#     cliProjectKey: ${{parameters.cliProjectKey}}
+#     cliSources: ${{parameters.sastCliSources}}
+
+# ## Perform Static Security scan for Node JS applications
+# ## Parameter "failOnIssues" ideally should be always commented and should be passed with value as false only in rare cases as it is centralised config for all StaticWebApp/NodeJS/Java based CI
+# - template: ../../internal-templates/performStaticCodeSecurityScanning/v1.1/performStaticCodeSecurityScanning.yaml
+  # parameters:
+  #   staticCodeSecurityScanProjectName: ${{parameters.staticCodeSecurityScanProjectName}}
+  #   targetFile: ${{parameters.staticCodeSecurityScanTargetManifestFile}}
+  #   securityScanTargetName: ${{parameters.securityScanTargetName}}
+  #   #failOnIssues: false
+
+## Build and push an image to Container Registry
+- template: internal-templates/buildAndPushToContainerRegistry.yaml@ci-templates
+  parameters:
+    containerImageRegistryServiceConnection: ${{parameters.containerImageRegistryServiceConnection}}
+    imageRepository: ${{parameters.imageRepository}} 
+    dockerFilePath: ${{parameters.dockerFilePath}}
+    imageTagSuffix: ${{parameters.imageTagSuffix}}
+    additionalTag: ${{parameters.additionalTag}}
+    dockerCliBuildArgs: ${{parameters.dockerCliBuildArgs}}

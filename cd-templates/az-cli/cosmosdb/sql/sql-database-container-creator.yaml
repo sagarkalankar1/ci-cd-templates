@@ -1,0 +1,41 @@
+# dBContainerMetadatajsonFilePath (required) (string) Database and container creation Json file.
+# subscriptionId (required) (string) subscription ID.
+# resourceGroupName (required) (string) Resource Group Name.
+# cosmosDBAccountName (required) (string) CosmosDB Account Name.
+# azureServiceConnection (required) (string) Azure Service Connection to access DB Service.
+
+parameters:
+  - name: dBContainerMetadatajsonFilePath
+    displayName: Database and container creation Json file
+    type: string
+
+  - name: subscriptionId
+    displayName: subscription ID
+    type: string
+
+  - name: resourceGroupName
+    displayName: Resource Group Name
+    type: string
+
+  - name: cosmosDBAccountName
+    displayName: CosmosDB Account Name
+    type: string
+
+  - name: azureServiceConnection
+    displayName: Azure Service Connection to access DB Service
+    type: string
+
+steps:
+
+- checkout: self
+- checkout: cd-templates
+- checkout: containerDBMetaDataRepo
+    
+- task: AzureCLI@2
+  inputs:
+    azureSubscription: ${{ parameters.azureServiceConnection }}
+    scriptType: 'bash'
+    scriptLocation: 'scriptPath'
+    scriptPath: 'ci-cd-templates/cd-templates/az-cli/cosmosdb/sql/database-containers-creator.sh'
+    arguments: |
+      -DB_CONTAINER_METADATA_JSON_FILE_PATH "${{ parameters.dBContainerMetadatajsonFilePath }}" -SUBSCRIPTION_ID "${{ parameters.subscriptionId }}" -RESOURCE_GROUP_NAME "${{ parameters.resourceGroupName }}" -COSMOSDB_ACCOUNT_NAME "${{ parameters.cosmosDBAccountName }}"
